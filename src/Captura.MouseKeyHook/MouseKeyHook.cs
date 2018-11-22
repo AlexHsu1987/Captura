@@ -23,7 +23,6 @@ namespace Captura.Models
         readonly KeyRecords _records;
 
         readonly KeymapViewModel _keymap;
-        readonly Func<TimeSpan> _elapsed;
 
         FileStream _keystrokeFileStream;
         TextWriter _textWriter;
@@ -55,29 +54,7 @@ namespace Captura.Models
 
             if (KeystrokesSettings.SeparateTextFile)
             {
-                _elapsed = Elapsed;
-
-                var dir = Path.GetDirectoryName(FileName);
-                var fileNameWoExt = Path.GetFileNameWithoutExtension(FileName);
-
-                var targetName = $"{fileNameWoExt}.keys.txt";
-
-                var path = dir == null ? targetName : Path.Combine(dir, targetName);
-
-                _keystrokeFileStream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read);
-                _textWriter = new StreamWriter(_keystrokeFileStream);
-
-                _hook.KeyDown += (S, E) =>
-                {
-                    if (!_keystrokesSettings.Display)
-                    {
-                        return;
-                    }
-
-                    var record = new KeyRecord(E, _keymap);
-
-                    _textWriter.WriteLine($"{_elapsed.Invoke()}: {record.Display}");
-                };
+                InitSrtFile(FileName, Elapsed);
             }
             else
             {
@@ -86,6 +63,39 @@ namespace Captura.Models
                 _hook.KeyDown += OnKeyDown;
                 _hook.KeyUp += OnKeyUp;
             }
+        }
+
+        int _index = 1;
+
+        void InitSrtFile(string FileName, Func<TimeSpan> Elapsed)
+        {
+            var dir = Path.GetDirectoryName(FileName);
+            var fileNameWoExt = Path.GetFileNameWithoutExtension(FileName);
+
+            var targetName = $"{fileNameWoExt}.srt";
+
+            var path = dir == null ? targetName : Path.Combine(dir, targetName);
+
+            _keystrokeFileStream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read);
+            _textWriter = new StreamWriter(_keystrokeFileStream);
+
+            _hook.KeyDown += (S, E) =>
+            {
+                if (!_keystrokesSettings.Display)
+                {
+                    return;
+                }
+
+                var record = new KeyRecord(E, _keymap);
+
+                _textWriter.WriteLine(_index++);
+
+                _textWriter.WriteLine($"{Elapsed.Invoke()},000 --> {Elapsed.Invoke()},500");
+
+                _textWriter.WriteLine(record.Display);
+
+                _textWriter.WriteLine();
+            };
         }
 
         void OnKeyUp(object Sender, KeyEventArgs Args)
