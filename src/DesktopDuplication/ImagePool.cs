@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using Captura;
 
 namespace Screna
@@ -60,6 +61,11 @@ namespace Screna
         public void CopyTo(byte[] Buffer, int Length)
         {
             Array.Copy(ImageData, Buffer, Length);
+        }
+
+        public void CopyTo(IntPtr Buffer)
+        {
+            Marshal.Copy(ImageData, 0, Buffer, ImageData.Length);
         }
 
         public IBitmapEditor GetEditor() => DummyBitmapEditor.Instance;
