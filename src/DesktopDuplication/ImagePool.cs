@@ -40,7 +40,7 @@ namespace Screna
         public void DrawString(string Text, Font Font, Brush Brush, RectangleF LayoutRectangle) { }
     }
 
-    public class ReusableFrame : IBitmapFrame
+    public class ReusableFrame : IBitmapFrame, IDirectBufferAccess
     {
         public byte[] ImageData { get; }
 
