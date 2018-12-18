@@ -16,7 +16,6 @@ namespace Screna
 
         public static IBitmapEditor Instance { get; } = new DummyBitmapEditor();
 
-
         public void Dispose() { }
 
         public Graphics Graphics { get; }
@@ -26,9 +25,19 @@ namespace Screna
 
         public void FillRectangle(Brush Brush, RectangleF Rectangle) { }
 
+        public void FillRectangle(Brush Brush, RectangleF Rectangle, int CornerRadius) { }
+
+        public void DrawRectangle(Pen Pen, RectangleF Rectangle) { }
+
+        public void DrawRectangle(Pen Pen, RectangleF Rectangle, int CornerRadius) { }
+
         public void FillEllipse(Brush Brush, RectangleF Rectangle) { }
 
         public void DrawEllipse(Pen Pen, RectangleF Rectangle) { }
+
+        public SizeF MeasureString(string Text, Font Font) => new SizeF(Text.Length, 1);
+
+        public void DrawString(string Text, Font Font, Brush Brush, RectangleF LayoutRectangle) { }
     }
 
     public class ReusableFrame : IBitmapFrame, IDirectBufferAccess
