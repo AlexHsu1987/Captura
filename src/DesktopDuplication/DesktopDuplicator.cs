@@ -1,14 +1,11 @@
 ﻿// Adapted from https://github.com/jasonpang/desktop-duplication-net
 
 using Screna;
-using SharpDX;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using System;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 using Captura;
 using Device = SharpDX.Direct3D11.Device;
 using MapFlags = SharpDX.Direct3D11.MapFlags;
@@ -17,26 +14,19 @@ namespace DesktopDuplication
 {
     public class DesktopDuplicator : IDisposable
     {
-        #region Fields
         readonly Device _device;
-        readonly OutputDuplication _deskDupl;
-
         readonly Texture2D _desktopImageTexture;
-        OutputDuplicateFrameInformation _frameInfo;
-
         readonly Rectangle _rect;
-
         readonly bool _includeCursor;
-        #endregion
-
-        int Timeout { get; } = 5000;
-
+        readonly Output1 _output;
+        DuplCapture _duplCapture;
         readonly ImagePool _imagePool;
 
         public DesktopDuplicator(Rectangle Rect, bool IncludeCursor, Adapter Adapter, Output1 Output)
         {
             _rect = Rect;
             _includeCursor = IncludeCursor;
+            _output = Output;
 
             _imagePool = new ImagePool(Rect.Width, Rect.Height);
             
@@ -56,65 +46,35 @@ namespace DesktopDuplication
                 Usage = ResourceUsage.Staging
             };
 
-            try
-            {
-                _deskDupl = Output.DuplicateOutput(_device);
-            }
-            catch (SharpDXException e) when (e.Descriptor == SharpDX.DXGI.ResultCode.NotCurrentlyAvailable)
-            {
-                throw new Exception("There is already the maximum number of applications using the Desktop Duplication API running, please close one of the applications and try again.", e);
-            }
-            catch (SharpDXException e) when (e.Descriptor == SharpDX.DXGI.ResultCode.Unsupported)
-            {
-                throw new NotSupportedException("Desktop Duplication is not supported on this system.\nIf you have multiple graphic cards, try running Captura on integrated graphics.", e);
-            }
+            InitDuplCapture();
 
             _desktopImageTexture = new Texture2D(_device, textureDesc);
         }
 
-        SharpDX.DXGI.Resource _desktopResource;
-
-        Task _acquireTask;
-
-        void BeginAcquireTask()
+        void InitDuplCapture()
         {
-            _acquireTask = Task.Run(() => _deskDupl.AcquireNextFrame(Timeout, out _frameInfo, out _desktopResource));
+            _duplCapture?.Dispose();
+            
+            _duplCapture = new DuplCapture(_device, _output);
         }
 
         public IBitmapFrame Capture()
         {
-            if (_acquireTask == null)
-            {
-                BeginAcquireTask();
-
-                return RepeatFrame.Instance;
-            }
-
             try
             {
-                _acquireTask.GetAwaiter().GetResult();
+                if (!_duplCapture.Get(_desktopImageTexture))
+                    return RepeatFrame.Instance;
             }
-            catch (SharpDXException e) when (e.Descriptor == SharpDX.DXGI.ResultCode.WaitTimeout)
+            catch
             {
+                try { InitDuplCapture(); }
+                catch
+                {
+                    // catch
+                }
+
                 return RepeatFrame.Instance;
             }
-            catch (SharpDXException e) when (e.ResultCode.Failure)
-            {
-                throw new Exception("Failed to acquire next frame.", e);
-            }
-            
-            using (_desktopResource)
-            {
-                using (var tempTexture = _desktopResource.QueryInterface<Texture2D>())
-                {
-                    var resourceRegion = new ResourceRegion(_rect.Left, _rect.Top, 0, _rect.Right, _rect.Bottom, 1);
-
-                    _device.ImmediateContext.CopySubresourceRegion(tempTexture, 0, resourceRegion, _desktopImageTexture, 0);
-                }
-            }
-
-            ReleaseFrame();
-            BeginAcquireTask();
 
             var mapSource = _device.ImmediateContext.MapSubresource(_desktopImageTexture, 0, MapMode.Read, MapFlags.None);
 
@@ -142,29 +102,12 @@ namespace DesktopDuplication
 
             return img;
         }
-        
-        void ReleaseFrame()
-        {
-            try
-            {
-                _deskDupl.ReleaseFrame();
-            }
-            catch (SharpDXException e)
-            {
-                if (e.ResultCode.Failure)
-                {
-                    throw new Exception("Failed to release frame.", e);
-                }
-            }
-        }
 
         public void Dispose()
         {
             try
             {
-                _acquireTask?.GetAwaiter().GetResult();
-
-                _deskDupl?.Dispose();
+                _duplCapture?.Dispose();
                 _desktopImageTexture?.Dispose();
                 _device?.Dispose();
             }
